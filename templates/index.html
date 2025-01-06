@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Face Detection App</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+        video, img {
+            width: 80%;
+            max-width: 640px;
+            border: 2px solid #333;
+            border-radius: 10px;
+        }
+        #status {
+            margin-top: 10px;
+            font-size: 16px;
+            color: green;
+        }
+    </style>
+</head>
+<body>
+    <h1>Face Detection App</h1>
+    <video id="video" autoplay playsinline></video>
+    <p id="status">Đang kết nối...</p>
+    <img id="processed-frame" src="" alt="Processed Frame">
+
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script>
+        const video = document.getElementById('video');
+        const processedFrame = document.getElementById('processed-frame');
+        const status = document.getElementById('status');
+        const socket = io();
+
+        // Yêu cầu quyền truy cập camera
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then((stream) => {
+                video.srcObject = stream;
+                status.textContent = "Camera đã sẵn sàng!";
+            })
+            .catch((err) => {
+                console.error("Không thể truy cập camera:", err);
+                status.textContent = "Không thể truy cập camera!";
+                status.style.color = "red";
+            });
+
+        // Gửi dữ liệu video qua WebSocket
+        function sendFrame() {
+            const canvas = document.createElement("canvas");
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const context = canvas.getContext("2d");
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // Lấy dữ liệu hình ảnh dưới dạng base64
+            const frameData = canvas.toDataURL("image/jpeg").split(",")[1];
+
+            // Gửi lên server qua WebSocket
+            socket.emit("video_frame", frameData);
+
+            // Gửi khung hình tiếp theo
+            requestAnimationFrame(sendFrame);
+        }
+
+        video.addEventListener("play", () => {
+            sendFrame(); // Bắt đầu gửi dữ liệu khi video chạy
+        });
+
+        // Hiển thị khung hình đã xử lý từ server
+        socket.on("processed_frame", (data) => {
+            processedFrame.src = `data:image/jpeg;base64,${data}`;
+        });
+
+        socket.on("connect", () => {
+            status.textContent = "Đã kết nối đến server!";
+            status.style.color = "green";
+        });
+
+        socket.on("disconnect", () => {
+            status.textContent = "Mất kết nối đến server!";
+            status.style.color = "red";
+        });
+    </script>
+</body>
+</html>
